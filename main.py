@@ -9,7 +9,9 @@ if __name__ == '__main__':
             group_id = input('Group Id: ')
             artifact_id = input('Artifact Id: ')
             version = input('版本号: ')
+            print('正在生成...')
             SpringMvcCreator().create(out_dir, group_id, artifact_id, version)
+            print('已生成')
         else:
             print('还没做呢')
     except IndexError as e:
