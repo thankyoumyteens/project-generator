@@ -107,7 +107,7 @@ class SpringMvcCreator:
         f = os.path.join(project_dir, '.gitignore')
         self._write_default_file('templates/spring-mvc/.gitignore', f)
 
-    def create_spring_mvc_project(self, root_dir, group_id, artifact_id, version):
+    def create(self, root_dir, group_id, artifact_id, version):
         # 清理输出文件夹
         if not os.path.exists(root_dir):
             os.makedirs(root_dir)
