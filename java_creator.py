@@ -1,6 +1,8 @@
 import os
 import shutil
 import re
+import db
+import util
 
 
 class SpringMvcCreator:
@@ -53,7 +55,131 @@ class SpringMvcCreator:
         content = re.sub('%BASE_PACKAGE', base_package, content)
         self._write_file(content, f)
 
-    def _create_java(self, java_dir, base_package):
+    @staticmethod
+    def _generate_fields(columns):
+        """
+        生成实体类的成员变量
+        :param columns:
+        :return:
+        """
+        fields_str = ''
+        for column in columns:
+            name = column['name']
+            db_type = column['type']
+            field_name = util.get_field_name(name)
+            java_type = util.get_java_type(db_type)
+            fields_str += '\tprivate ' + java_type + ' ' + field_name + ';\n'
+        return fields_str
+
+    @staticmethod
+    def _generate_setters(columns):
+        """
+        生成实体类的setter方法
+        :param columns:
+        :return:
+        """
+        setters_str = ''
+        for column in columns:
+            name = column['name']
+            db_type = column['type']
+            method_name = util.get_class_name(name)
+            field_name = util.get_field_name(name)
+            java_type = util.get_java_type(db_type)
+            setters_str += '\tpublic void set' + method_name + '(' + java_type + ' ' + field_name + ') { this.' + field_name + ' = ' + field_name + '; }\n'
+        return setters_str
+
+    @staticmethod
+    def _generate_getters(columns):
+        """
+        生成实体类的getter方法
+        :param columns:
+        :return:
+        """
+        getters_str = ''
+        for column in columns:
+            name = column['name']
+            db_type = column['type']
+            method_name = util.get_class_name(name)
+            field_name = util.get_field_name(name)
+            java_type = util.get_java_type(db_type)
+            getters_str += '\tpublic ' + java_type + ' get' + method_name + '() { return ' + field_name + '; }\n'
+        return getters_str
+
+    def _create_pojo(self, pojo_package, base_package, db_info):
+        """
+        生成实体类
+        :param pojo_package:
+        :param base_package:
+        :param db_info:
+        :return:
+        """
+        if not os.path.exists(pojo_package):
+            os.makedirs(pojo_package)
+        for table_info in db_info.items():
+            # 为每一张表创建一个对应的实体类
+            table_name = table_info[0]
+            columns = table_info[1]
+            content = ''
+            class_name = util.get_class_name(table_name)
+            file_name = os.path.join(pojo_package, class_name + '.java')
+            package_str = 'package ' + base_package + '.pojo;'
+            # import_str = ''
+            class_str = 'public class ' + class_name + ' {'
+            class_str += '\n'
+            class_str += self._generate_fields(columns)
+            class_str += '\n'
+            class_str += self._generate_setters(columns)
+            class_str += '\n'
+            class_str += self._generate_getters(columns)
+            class_str += '}'
+
+            content += package_str
+            content += '\n\n'
+            # content += import_str
+            # content += '\n\n'
+            content += class_str
+            self._write_file(content, file_name)
+
+    def _create_dao(self, dao_package, base_package, db_info):
+        if not os.path.exists(dao_package):
+            os.makedirs(dao_package)
+        for table_info in db_info.items():
+            # 为每一张表创建一个对应的Dao
+            table_name = table_info[0]
+            columns = table_info[1]
+            primary_key = 'id'
+            primary_key_type = 'Long'
+            for column in columns:
+                name = column['name']
+                db_type = column['type']
+                java_type = util.get_java_type(db_type)
+                is_primary_key = column['is_primary_key']
+                if is_primary_key:
+                    primary_key = name
+                    primary_key_type = java_type
+            content = ''
+            class_name = util.get_class_name(table_name)
+            file_name = os.path.join(dao_package, class_name + 'Dao.java')
+            package_str = 'package ' + base_package + '.dao;'
+            import_str = 'import ' + base_package + '.pojo.' + class_name + ';'
+            class_str = 'public interface ' + class_name + 'Dao {'
+            class_str += '\n'
+            class_str += '\tint deleteByPrimaryKey(' + primary_key_type + ' ' + primary_key + ');\n\n'
+            class_str += '\tint insert(' + class_name + ' record);\n\n'
+            class_str += '\tint insertSelective(' + class_name + ' record);\n\n'
+            class_str += '\t' + class_name + ' selectByPrimaryKey(Long id);\n\n'
+            class_str += '\tint updateByPrimaryKeySelective(' + class_name + ' record);\n\n'
+            class_str += '\tint updateByPrimaryKey(' + class_name + ' record);\n'
+            class_str += '}'
+
+            content += package_str
+            content += '\n\n'
+            content += import_str
+            content += '\n\n'
+            content += class_str
+            self._write_file(content, file_name)
+
+    def _create_java(self, java_dir, base_package, db_conn):
         """
         生成java源代码
         :param java_dir: java文件夹
@@ -63,12 +189,19 @@ class SpringMvcCreator:
         packages = base_package.split('.')
         for package in packages:
             java_dir = os.path.join(java_dir, package)
+        db_arr = db_conn.split('/')
+        if len(db_arr) == 6:
+            db_util = db.MySqlUtil(db_arr[0], db_arr[1], db_arr[2], db_arr[3], db_arr[4], db_arr[5])
+        else:
+            db_util = db.MySqlUtil(db_arr[0], db_arr[1], db_arr[2], db_arr[3], db_arr[4])
+        db_info = db_util.get_db_info()
         # controller
         controller_package = os.path.join(java_dir, 'controller')
         self._create_file_with_replace(controller_package, 'TestController.java', base_package)
         # dao
         dao_package = os.path.join(java_dir, 'dao')
-        self._create_file_with_replace(dao_package, 'TestDao.java', base_package)
+        # self._create_file_with_replace(dao_package, 'TestDao.java', base_package)
+        self._create_dao(dao_package, base_package, db_info)
         # service
         service_package = os.path.join(java_dir, 'service')
         self._create_file_with_replace(service_package, 'TestService.java', base_package)
@@ -77,7 +210,8 @@ class SpringMvcCreator:
         os.makedirs(service_impl_package)
         # 实体类
         pojo_package = os.path.join(java_dir, 'pojo')
-        self._create_file_with_replace(pojo_package, 'TestPoJo.java', base_package)
+        # self._create_file_with_replace(pojo_package, 'TestPoJo.java', base_package)
+        self._create_pojo(pojo_package, base_package, db_info)
         # 过滤器
         filter_package = os.path.join(java_dir, 'filter')
         self._create_file_with_replace(filter_package, 'CORSFilter.java', base_package)
@@ -85,7 +219,7 @@ class SpringMvcCreator:
         interceptor_package = os.path.join(java_dir, 'interceptor')
         self._create_file_with_replace(interceptor_package, 'AuthorityInterceptor.java', base_package)
 
-    def _create_resources(self, resources_dir, base_package):
+    def _create_resources(self, resources_dir, base_package, db_conn):
         """
         生成资源文件夹
         :param resources_dir: 资源文件夹
@@ -106,7 +240,14 @@ class SpringMvcCreator:
         self._create_file_with_replace(resources_dir, 'logback.xml', base_package)
         # datasource.properties
         f = os.path.join(resources_dir, 'datasource.properties')
-        self._write_default_file('templates/spring-mvc/datasource.properties', f)
+        content = self._get_template('templates/spring-mvc/datasource.properties')
+        db_arr = db_conn.split('/')
+        content = re.sub('%USERNAME', db_arr[2], content)
+        content = re.sub('%PASSWORD', db_arr[3], content)
+        content = re.sub('%HOST', db_arr[0], content)
+        content = re.sub('%PORT', db_arr[1], content)
+        content = re.sub('%DB', db_arr[4], content)
+        self._write_file(content, f)
         # TestMapper.xml
         mappers_dir = os.path.join(resources_dir, 'mappers')
         self._create_file_with_replace(mappers_dir, 'TestMapper.xml', base_package)
@@ -168,7 +309,7 @@ class SpringMvcCreator:
         f = os.path.join(project_dir, '.gitignore')
         self._write_default_file('templates/spring-mvc/.gitignore', f)
 
-    def create(self, root_dir, group_id, artifact_id, version):
+    def create(self, root_dir, group_id, artifact_id, version, db_conn):
         # 清理输出文件夹
         if not os.path.exists(root_dir):
             os.makedirs(root_dir)
@@ -187,10 +328,10 @@ class SpringMvcCreator:
         main_dir = os.path.join(src_dir, 'main')
         # java源文件文件夹
         java_dir = os.path.join(main_dir, 'java')
-        self._create_java(java_dir, group_id)
+        self._create_java(java_dir, group_id, db_conn)
         # 资源文件文件夹
         resources_dir = os.path.join(main_dir, 'resources')
-        self._create_resources(resources_dir, group_id)
+        self._create_resources(resources_dir, group_id, db_conn)
         # webapp文件夹
         webapp_dir = os.path.join(main_dir, 'webapp')
         self._create_webapp(webapp_dir, group_id)
