@@ -141,12 +141,20 @@ class SpringMvcCreator:
             self._write_file(content, file_name)
 
     def _create_dao(self, dao_package, base_package, db_info):
+        """
+        生成Dao接口
+        :param dao_package:
+        :param base_package:
+        :param db_info:
+        :return:
+        """
         if not os.path.exists(dao_package):
             os.makedirs(dao_package)
         for table_info in db_info.items():
             # 为每一张表创建一个对应的Dao
             table_name = table_info[0]
             columns = table_info[1]
+            # 找到主键
             primary_key = 'id'
             primary_key_type = 'Long'
             for column in columns:
@@ -157,6 +165,7 @@ class SpringMvcCreator:
                 if is_primary_key:
                     primary_key = name
                     primary_key_type = java_type
+            # 内容
             content = ''
             class_name = util.get_class_name(table_name)
             file_name = os.path.join(dao_package, class_name + 'Dao.java')
@@ -179,6 +188,121 @@ class SpringMvcCreator:
             content += class_str
             self._write_file(content, file_name)
 
+    @staticmethod
+    def _generate_result_map(base_package, class_name, columns):
+        result = '\t<resultMap id="BaseResultMap" type="' + base_package + '.pojo.' + class_name + '">\n'
+        result += '\t\t<constructor>\n'
+        for column in columns:
+            name = column['name']
+            db_type = column['type']
+            java_type, jdbc_type = util.get_type_map(db_type)
+            is_primary_key = column['is_primary_key']
+            if is_primary_key:
+                result += '\t\t\t<idArg column="' + name + '" javaType="' + java_type + '" jdbcType="' + jdbc_type + '" />\n'
+            else:
+                result += '\t\t\t<arg column="' + name + '" javaType="' + java_type + '" jdbcType="' + jdbc_type + '" />\n'
+        result += '\t\t</constructor>\n'
+        result += '\t</resultMap>\n'
+        return result
+
+    def _create_mapper(self, mappers_dir, base_package, db_info):
+        """
+        生成MyBatis的sql映射文件
+        :param mappers_dir:
+        :param base_package:
+        :param db_info:
+        :return:
+        """
+        if not os.path.exists(mappers_dir):
+            os.makedirs(mappers_dir)
+        for table_info in db_info.items():
+            # 为每一张表创建一个对应的mybatis映射
+            table_name = table_info[0]
+            columns = table_info[1]
+            # 找到主键
+            primary_key = 'id'
+            primary_key_type = 'Long'
+            primary_key_jdbc_type = 'BIGINT'
+            for column in columns:
+                name = column['name']
+                db_type = column['type']
+                java_type, jdbc_type = util.get_type_map(db_type)
+                is_primary_key = column['is_primary_key']
+                if is_primary_key:
+                    primary_key = name
+                    primary_key_type = java_type
+                    primary_key_jdbc_type = jdbc_type
+            # 内容
+            content = ''
+            class_name = util.get_class_name(table_name)
+            file_name = os.path.join(mappers_dir, class_name + 'Mapper.xml')
+            # header
+            header_str = '<?xml version="1.0" encoding="UTF-8"?>\n'
+            header_str += '<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" ' \
+                          '"http://mybatis.org/dtd/mybatis-3-mapper.dtd">\n'
+            mapper_str = '<mapper namespace="' + base_package + '.dao.' + class_name + 'Dao">\n'
+            mapper_str += self._generate_result_map(base_package, class_name, columns)
+            # Base_Column_List
+            mapper_str += '\t<sql id="Base_Column_List">\n'
+            mapper_str += '\t\t'
+            for column in columns:
+                mapper_str += column['name'] + ', '
+            mapper_str = mapper_str[0: len(mapper_str) - 2]
+            mapper_str += '\n'
+            mapper_str += '\t</sql>\n'
+            # 实现dao接口的selectByPrimaryKey方法
+            mapper_str += '\t<select id="selectByPrimaryKey" parameterType="' + \
+                          primary_key_type + '" resultMap="BaseResultMap">\n'
+            mapper_str += '\t\tselect \n'
+            mapper_str += '\t\t<include refid="Base_Column_List" /> \n'
+            mapper_str += '\t\tfrom ' + table_name + ' \n'
+            mapper_str += '\t\twhere ' + primary_key + ' = #{' + primary_key + \
+                          ',jdbcType=' + primary_key_jdbc_type + '} \n'
+            mapper_str += '\t</select>\n'
+            # 实现dao接口的deleteByPrimaryKey方法
+            mapper_str += '\t<delete id="deleteByPrimaryKey" parameterType="' + \
+                          primary_key_type + '">\n'
+            mapper_str += '\t\tdelete from ' + table_name + ' \n'
+            mapper_str += '\t\twhere ' + primary_key + ' = #{' + primary_key + \
+                          ',jdbcType=' + primary_key_jdbc_type + '} \n'
+            mapper_str += '\t</delete>\n'
+            # 实现dao接口的insert方法
+            mapper_str += '\t<insert id="insert" parameterType="' + base_package + \
+                          '.pojo.' + class_name + '">\n'
+            mapper_str += '\t\tinsert into ' + table_name + ' ( \n'
+            for column in columns:
+                mapper_str += '\t\t\t' + column['name'] + ', \n'
+            mapper_str = mapper_str[0: len(mapper_str) - 3]
+            mapper_str += ')\n'
+            mapper_str += '\t\tvalues (\n'
+            for column in columns:
+                jdbc_type = util.get_type_map(column['type'])[1]
+                mapper_str += '\t\t\t#{' + column['name'] + ',jdbcType=' + jdbc_type + '}, \n'
+            mapper_str = mapper_str[0: len(mapper_str) - 3]
+            mapper_str += ')\n'
+            mapper_str += '\t</insert>\n'
+            # 实现dao接口的updateByPrimaryKey方法
+            mapper_str += '\t<update id="updateByPrimaryKey" parameterType="' + \
+                          base_package + '.pojo.' + class_name + '">\n'
+            mapper_str += '\t\tupdate ' + table_name + ' \n'
+            mapper_str += '\t\tset \n'
+            for column in columns:
+                if not column['is_primary_key']:
+                    jdbc_type = util.get_type_map(column['type'])[1]
+                    mapper_str += '\t\t\t' + column['name'] + ' = #{' + column['name'] + \
+                                  ',jdbcType=' + jdbc_type + '}, \n'
+            mapper_str = mapper_str[0: len(mapper_str) - 3]
+            mapper_str += '\n'
+            mapper_str += '\t\twhere ' + primary_key + ' = #{' + primary_key + \
+                          ',jdbcType=' + primary_key_jdbc_type + '} \n'
+            mapper_str += '\t</update>\n'
+            # todo insertSelective and updateByPrimaryKeySelective
+            mapper_str += '</mapper>\n'
+
+            content += header_str
+            content += mapper_str
+            self._write_file(content, file_name)
+
     def _create_java(self, java_dir, base_package, db_conn):
         """
         生成java源代码
@@ -189,23 +313,24 @@ class SpringMvcCreator:
         packages = base_package.split('.')
         for package in packages:
             java_dir = os.path.join(java_dir, package)
+        # 获取所有表
         db_arr = db_conn.split('/')
         if len(db_arr) == 6:
             db_util = db.MySqlUtil(db_arr[0], db_arr[1], db_arr[2], db_arr[3], db_arr[4], db_arr[5])
         else:
             db_util = db.MySqlUtil(db_arr[0], db_arr[1], db_arr[2], db_arr[3], db_arr[4])
         db_info = db_util.get_db_info()
-        # controller
+        # 控制器
         controller_package = os.path.join(java_dir, 'controller')
         self._create_file_with_replace(controller_package, 'TestController.java', base_package)
-        # dao
+        # 持久层
         dao_package = os.path.join(java_dir, 'dao')
         # self._create_file_with_replace(dao_package, 'TestDao.java', base_package)
         self._create_dao(dao_package, base_package, db_info)
-        # service
+        # 业务层接口
         service_package = os.path.join(java_dir, 'service')
         self._create_file_with_replace(service_package, 'TestService.java', base_package)
-        # service impl
+        # 业务层实现类
         service_impl_package = os.path.join(service_package, 'impl')
         os.makedirs(service_impl_package)
         # 实体类
@@ -227,18 +352,18 @@ class SpringMvcCreator:
         :return:
         """
         os.makedirs(resources_dir)
-        # app.properties
+        # 全局配置文件
         f = os.path.join(resources_dir, 'app.properties')
         self._write_default_file('templates/spring-mvc/app.properties', f)
-        # applicationContext.xml
+        # Spring配置文件
         self._create_file_with_replace(resources_dir, 'applicationContext.xml', base_package)
-        # applicationContext-datasource.xml
+        # Spring数据源配置文件
         self._create_file_with_replace(resources_dir, 'applicationContext-datasource.xml', base_package)
-        # dispatcher-servlet.xml
+        # SpringMVC配置文件
         self._create_file_with_replace(resources_dir, 'dispatcher-servlet.xml', base_package)
-        # logback.xml
+        # 日志配置文件
         self._create_file_with_replace(resources_dir, 'logback.xml', base_package)
-        # datasource.properties
+        # 数据库连接配置文件
         f = os.path.join(resources_dir, 'datasource.properties')
         content = self._get_template('templates/spring-mvc/datasource.properties')
         db_arr = db_conn.split('/')
@@ -248,9 +373,16 @@ class SpringMvcCreator:
         content = re.sub('%PORT', db_arr[1], content)
         content = re.sub('%DB', db_arr[4], content)
         self._write_file(content, f)
-        # TestMapper.xml
+        # MyBatis映射文件
+        db_arr = db_conn.split('/')
+        if len(db_arr) == 6:
+            db_util = db.MySqlUtil(db_arr[0], db_arr[1], db_arr[2], db_arr[3], db_arr[4], db_arr[5])
+        else:
+            db_util = db.MySqlUtil(db_arr[0], db_arr[1], db_arr[2], db_arr[3], db_arr[4])
+        db_info = db_util.get_db_info()
         mappers_dir = os.path.join(resources_dir, 'mappers')
-        self._create_file_with_replace(mappers_dir, 'TestMapper.xml', base_package)
+        # self._create_file_with_replace(mappers_dir, 'TestMapper.xml', base_package)
+        self._create_mapper(mappers_dir, base_package, db_info)
 
     def _create_webapp(self, webapp_dir, base_package):
         """
