@@ -3,6 +3,15 @@ import pymysql
 
 class MySqlUtil:
     def __init__(self, host, port, user, password, database, charset='utf8'):
+        """
+        初始化数据库连接
+        :param host: 数据库主机地址
+        :param port: 端口
+        :param user: 用户名
+        :param password: 密码
+        :param database: 数据库名
+        :param charset: 编码
+        """
         if not type(port) == int:
             port = int(port)
         conn = pymysql.connect(host=host, port=port,
@@ -37,15 +46,13 @@ class MySqlUtil:
         return result
 
     def get_db_info(self):
+        """
+        获取数据库的信息
+        :return: 表名和对应的列
+        """
         result = {}
         table_arr = self.get_tables()
         for item in table_arr:
             column_arr = self.get_columns(item)
             result[item] = column_arr
         return result
-
-
-if __name__ == '__main__':
-    db_util = MySqlUtil('localhost', 3306, 'root', 'honglang', 'mobile')
-    info = db_util.get_db_info()
-    print(info)

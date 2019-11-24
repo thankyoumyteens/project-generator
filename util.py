@@ -1,4 +1,9 @@
 def get_class_name(table_name):
+    """
+    把表名转换成java的类名
+    :param table_name: 表名
+    :return: 类名
+    """
     words = table_name.split('_')
     result = ''
     for word in words:
@@ -7,6 +12,11 @@ def get_class_name(table_name):
 
 
 def get_field_name(column_name):
+    """
+    把列名转换成java的字段名
+    :param column_name: 列名
+    :return: 字段名
+    """
     words = column_name.split('_')
     result = words.pop(0)
     for word in words:
@@ -15,6 +25,11 @@ def get_field_name(column_name):
 
 
 def get_java_type(column_type):
+    """
+    返回数据库中的类型所对应的java中的类型
+    :param column_type: 数据库数据类型
+    :return: java数据类型
+    """
     db_type = column_type
     if '(' in column_type:
         db_type = column_type[:column_type.index('(')]
@@ -36,6 +51,11 @@ def get_java_type(column_type):
 
 
 def get_type_map(column_type):
+    """
+    用于生成MyBatis的mapper
+    :param column_type: 数据库的数据类型
+    :return: java类全名, 数据库数据类型
+    """
     db_type = column_type
     if '(' in column_type:
         db_type = column_type[:column_type.index('(')]
@@ -54,9 +74,3 @@ def get_type_map(column_type):
     else:
         result = ('java.lang.String', 'VARCHAR')
     return result
-
-
-if __name__ == '__main__':
-    print(get_class_name('mobile_user_hahaha'))
-    print(get_field_name('mobile_user_hahaha'))
-    print(get_java_type('varchar(20)'))
