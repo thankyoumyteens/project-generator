@@ -205,6 +205,27 @@ class SpringMvcCreator:
         result += '\t</resultMap>\n'
         return result
 
+    @staticmethod
+    def _get_primary_key(columns):
+        """
+        获取表的主键
+        :param columns: 表中的所有列
+        :return: 主键
+        """
+        primary_key = 'id'
+        primary_key_type = 'Long'
+        primary_key_jdbc_type = 'BIGINT'
+        for column in columns:
+            name = column['name']
+            db_type = column['type']
+            java_type, jdbc_type = util.get_type_map(db_type)
+            is_primary_key = column['is_primary_key']
+            if is_primary_key:
+                primary_key = name
+                primary_key_type = java_type
+                primary_key_jdbc_type = jdbc_type
+        return primary_key, primary_key_type, primary_key_jdbc_type
+
     def _create_mapper(self, mappers_dir, base_package, db_info):
         """
         生成MyBatis的sql映射文件
@@ -220,18 +241,7 @@ class SpringMvcCreator:
             table_name = table_info[0]
             columns = table_info[1]
             # 找到主键
-            primary_key = 'id'
-            primary_key_type = 'Long'
-            primary_key_jdbc_type = 'BIGINT'
-            for column in columns:
-                name = column['name']
-                db_type = column['type']
-                java_type, jdbc_type = util.get_type_map(db_type)
-                is_primary_key = column['is_primary_key']
-                if is_primary_key:
-                    primary_key = name
-                    primary_key_type = java_type
-                    primary_key_jdbc_type = jdbc_type
+            primary_key, primary_key_type, primary_key_jdbc_type = self._get_primary_key(columns)
             # 内容
             content = ''
             class_name = util.get_class_name(table_name)
@@ -240,7 +250,9 @@ class SpringMvcCreator:
             header_str = '<?xml version="1.0" encoding="UTF-8"?>\n'
             header_str += '<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" ' \
                           '"http://mybatis.org/dtd/mybatis-3-mapper.dtd">\n'
+            # 指定Dao接口
             mapper_str = '<mapper namespace="' + base_package + '.dao.' + class_name + 'Dao">\n'
+            # BaseResultMap
             mapper_str += self._generate_result_map(base_package, class_name, columns)
             # Base_Column_List
             mapper_str += '\t<sql id="Base_Column_List">\n'
@@ -296,7 +308,40 @@ class SpringMvcCreator:
             mapper_str += '\t\twhere ' + primary_key + ' = #{' + primary_key + \
                           ',jdbcType=' + primary_key_jdbc_type + '} \n'
             mapper_str += '\t</update>\n'
-            # todo insertSelective and updateByPrimaryKeySelective
+            # 实现dao接口的insertSelective方法
+            mapper_str += '\t<insert id="insertSelective" parameterType="' + \
+                          base_package + '.pojo.' + class_name + '">\n'
+            mapper_str += '\t\tinsert into ' + table_name + ' \n'
+            mapper_str += '\t\t<trim prefix="(" suffix=")" suffixOverrides=",">\n'
+            for column in columns:
+                mapper_str += '\t\t\t<if test="' + util.get_field_name(column['name']) + ' != null">\n'
+                mapper_str += '\t\t\t\t' + column['name'] + ',\n'
+                mapper_str += '\t\t\t</if>\n'
+            mapper_str += '\t\t</trim>\n'
+            mapper_str += '\t\t<trim prefix="values (" suffix=")" suffixOverrides=",">\n'
+            for column in columns:
+                mapper_str += '\t\t\t<if test="' + util.get_field_name(column['name']) + ' != null">\n'
+                jdbc_type = util.get_type_map(column['type'])[1]
+                mapper_str += '\t\t\t\t#{' + column['name'] + ',jdbcType=' + jdbc_type + '}, \n'
+                mapper_str += '\t\t\t</if>\n'
+            mapper_str += '\t\t</trim>\n'
+            mapper_str += '\t</insert>\n'
+            # 实现dao接口的updateByPrimaryKeySelective方法
+            mapper_str += '\t<update id="updateByPrimaryKeySelective" parameterType="' + \
+                          base_package + '.pojo.' + class_name + '">\n'
+            mapper_str += '\t\tupdate ' + table_name + ' \n'
+            mapper_str += '\t\t<set>\n'
+            for column in columns:
+                if not column['is_primary_key']:
+                    mapper_str += '\t\t\t<if test="' + util.get_field_name(column['name']) + ' != null">\n'
+                    jdbc_type = util.get_type_map(column['type'])[1]
+                    mapper_str += '\t\t\t\t' + column['name'] + ' = #{' + column['name'] + \
+                                  ',jdbcType=' + jdbc_type + '}, \n'
+                    mapper_str += '\t\t\t</if>\n'
+            mapper_str += '\t\t</set>\n'
+            mapper_str += '\t\twhere ' + primary_key + ' = #{' + primary_key + \
+                          ',jdbcType=' + primary_key_jdbc_type + '} \n'
+            mapper_str += '\t</update>\n'
             mapper_str += '</mapper>\n'
 
             content += header_str
