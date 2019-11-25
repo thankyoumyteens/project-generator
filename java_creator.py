@@ -85,7 +85,8 @@ class SpringMvcCreator:
             method_name = util.get_class_name(name)
             field_name = util.get_field_name(name)
             java_type = util.get_java_type(db_type)
-            setters_str += '\tpublic void set' + method_name + '(' + java_type + ' ' + field_name + ') { this.' + field_name + ' = ' + field_name + '; }\n'
+            setters_str += '\tpublic void set' + method_name + '(' + java_type + ' ' + \
+                           field_name + ') { this.' + field_name + ' = ' + field_name + '; }\n'
         return setters_str
 
     @staticmethod
@@ -155,16 +156,8 @@ class SpringMvcCreator:
             table_name = table_info[0]
             columns = table_info[1]
             # 找到主键
-            primary_key = 'id'
-            primary_key_type = 'Long'
-            for column in columns:
-                name = column['name']
-                db_type = column['type']
-                java_type = util.get_java_type(db_type)
-                is_primary_key = column['is_primary_key']
-                if is_primary_key:
-                    primary_key = name
-                    primary_key_type = java_type
+            primary_key, primary_key_type, primary_key_type_short, primary_key_jdbc_type = \
+                self._get_primary_key(columns)
             # 内容
             content = ''
             class_name = util.get_class_name(table_name)
@@ -173,10 +166,11 @@ class SpringMvcCreator:
             import_str = 'import ' + base_package + '.pojo.' + class_name + ';'
             class_str = 'public interface ' + class_name + 'Dao {'
             class_str += '\n'
-            class_str += '\tint deleteByPrimaryKey(' + primary_key_type + ' ' + primary_key + ');\n\n'
+            class_str += '\tint deleteByPrimaryKey(' + primary_key_type_short + ' ' + primary_key + ');\n\n'
             class_str += '\tint insert(' + class_name + ' record);\n\n'
             class_str += '\tint insertSelective(' + class_name + ' record);\n\n'
-            class_str += '\t' + class_name + ' selectByPrimaryKey(Long id);\n\n'
+            class_str += '\t' + class_name + ' selectByPrimaryKey(' + \
+                         primary_key_type_short + ' ' + primary_key + ');\n\n'
             class_str += '\tint updateByPrimaryKeySelective(' + class_name + ' record);\n\n'
             class_str += '\tint updateByPrimaryKey(' + class_name + ' record);\n'
             class_str += '}'
@@ -198,9 +192,11 @@ class SpringMvcCreator:
             java_type, jdbc_type = util.get_type_map(db_type)
             is_primary_key = column['is_primary_key']
             if is_primary_key:
-                result += '\t\t\t<idArg column="' + name + '" javaType="' + java_type + '" jdbcType="' + jdbc_type + '" />\n'
+                result += '\t\t\t<idArg column="' + name + '" javaType="' + \
+                          java_type + '" jdbcType="' + jdbc_type + '" />\n'
             else:
-                result += '\t\t\t<arg column="' + name + '" javaType="' + java_type + '" jdbcType="' + jdbc_type + '" />\n'
+                result += '\t\t\t<arg column="' + name + '" javaType="' + \
+                          java_type + '" jdbcType="' + jdbc_type + '" />\n'
         result += '\t\t</constructor>\n'
         result += '\t</resultMap>\n'
         return result
@@ -213,18 +209,21 @@ class SpringMvcCreator:
         :return: 主键
         """
         primary_key = 'id'
-        primary_key_type = 'Long'
+        primary_key_type = 'java.lang.Long'
+        primary_key_type_short = 'Long'
         primary_key_jdbc_type = 'BIGINT'
         for column in columns:
             name = column['name']
             db_type = column['type']
             java_type, jdbc_type = util.get_type_map(db_type)
+            java_type_short = util.get_java_type(db_type)
             is_primary_key = column['is_primary_key']
             if is_primary_key:
                 primary_key = name
                 primary_key_type = java_type
+                primary_key_type_short = java_type_short
                 primary_key_jdbc_type = jdbc_type
-        return primary_key, primary_key_type, primary_key_jdbc_type
+        return primary_key, primary_key_type, primary_key_type_short, primary_key_jdbc_type
 
     def _create_mapper(self, mappers_dir, base_package, db_info):
         """
@@ -241,7 +240,8 @@ class SpringMvcCreator:
             table_name = table_info[0]
             columns = table_info[1]
             # 找到主键
-            primary_key, primary_key_type, primary_key_jdbc_type = self._get_primary_key(columns)
+            primary_key, primary_key_type, primary_key_type_short, primary_key_jdbc_type = \
+                self._get_primary_key(columns)
             # 内容
             content = ''
             class_name = util.get_class_name(table_name)
@@ -348,6 +348,101 @@ class SpringMvcCreator:
             content += mapper_str
             self._write_file(content, file_name)
 
+    def _create_service(self, service_package, base_package, db_info):
+        """
+        生成service接口
+        :param service_package:
+        :param base_package:
+        :param db_info:
+        :return:
+        """
+        if not os.path.exists(service_package):
+            os.makedirs(service_package)
+        for table_info in db_info.items():
+            # 为每一张表创建一个对应的Service
+            table_name = table_info[0]
+            columns = table_info[1]
+            # 找到主键
+            primary_key, primary_key_type, primary_key_type_short, primary_key_jdbc_type = \
+                self._get_primary_key(columns)
+            # 内容
+            content = ''
+            class_name = util.get_class_name(table_name)
+            file_name = os.path.join(service_package, class_name + 'Service.java')
+            package_str = 'package ' + base_package + '.service;'
+            import_str = 'import ' + base_package + '.pojo.' + class_name + ';'
+            class_str = 'public interface ' + class_name + 'Service {'
+            class_str += '\n'
+            class_str += '\tint deleteByPrimaryKey(' + primary_key_type_short + ' ' + primary_key + ');\n\n'
+            class_str += '\tint insert(' + class_name + ' record);\n\n'
+            class_str += '\tint insertSelective(' + class_name + ' record);\n\n'
+            class_str += '\t' + class_name + ' selectByPrimaryKey(' + primary_key_type_short + \
+                         ' ' + primary_key + ');\n\n'
+            class_str += '\tint updateByPrimaryKeySelective(' + class_name + ' record);\n\n'
+            class_str += '\tint updateByPrimaryKey(' + class_name + ' record);\n'
+            class_str += '}'
+
+            content += package_str
+            content += '\n\n'
+            content += import_str
+            content += '\n\n'
+            content += class_str
+            self._write_file(content, file_name)
+
+    def _create_service_impl(self, service_impl_package, base_package, db_info):
+        """
+        生成service实现类
+        :param service_impl_package:
+        :param base_package:
+        :param db_info:
+        :return:
+        """
+        if not os.path.exists(service_impl_package):
+            os.makedirs(service_impl_package)
+        for table_info in db_info.items():
+            # 为每一张表创建一个对应的Impl
+            table_name = table_info[0]
+            columns = table_info[1]
+            # 找到主键
+            primary_key, primary_key_type, primary_key_type_short, primary_key_jdbc_type = \
+                self._get_primary_key(columns)
+            # 内容
+            content = ''
+            class_name = util.get_class_name(table_name)
+            file_name = os.path.join(service_impl_package, class_name + 'ServiceImpl.java')
+            package_str = 'package ' + base_package + '.service.impl;'
+            import_str = 'import ' + base_package + '.service.' + class_name + 'Service;\n'
+            import_str += 'import ' + base_package + '.pojo.' + class_name + ';\n'
+            import_str += 'import javax.annotation.Resource;'
+            class_str = '@Service("' + util.get_field_name(table_name) + 'Service")\n'
+            class_str += 'public class ' + class_name + 'ServiceImpl implements ' + class_name + 'Service {'
+            class_str += '\n\n'
+            class_str += '\t@Resource\n'
+            class_str += '\tprivate ' + class_name + 'Dao dao;'
+            class_str += '\n\n'
+            class_str += '\t@Override\n'
+            class_str += '\tint deleteByPrimaryKey(' + primary_key_type_short + ' ' + primary_key + ') ' + \
+                         '{ return -1; }\n\n'
+            class_str += '\t@Override\n'
+            class_str += '\tint insert(' + class_name + ' record) { return -1; }\n\n'
+            class_str += '\t@Override\n'
+            class_str += '\tint insertSelective(' + class_name + ' record) { return -1; }\n\n'
+            class_str += '\t@Override\n'
+            class_str += '\t' + class_name + ' selectByPrimaryKey(' + primary_key_type_short + ' ' + \
+                         primary_key + ') { return null; }\n\n'
+            class_str += '\t@Override\n'
+            class_str += '\tint updateByPrimaryKeySelective(' + class_name + ' record) { return -1; }\n\n'
+            class_str += '\t@Override\n'
+            class_str += '\tint updateByPrimaryKey(' + class_name + ' record) { return -1; }\n'
+            class_str += '}'
+
+            content += package_str
+            content += '\n\n'
+            content += import_str
+            content += '\n\n'
+            content += class_str
+            self._write_file(content, file_name)
+
     def _create_java(self, java_dir, base_package, db_conn):
         """
         生成java源代码
@@ -370,17 +465,15 @@ class SpringMvcCreator:
         self._create_file_with_replace(controller_package, 'TestController.java', base_package)
         # 持久层
         dao_package = os.path.join(java_dir, 'dao')
-        # self._create_file_with_replace(dao_package, 'TestDao.java', base_package)
         self._create_dao(dao_package, base_package, db_info)
         # 业务层接口
         service_package = os.path.join(java_dir, 'service')
-        self._create_file_with_replace(service_package, 'TestService.java', base_package)
+        self._create_service(service_package, base_package, db_info)
         # 业务层实现类
         service_impl_package = os.path.join(service_package, 'impl')
-        os.makedirs(service_impl_package)
+        self._create_service_impl(service_impl_package, base_package, db_info)
         # 实体类
         pojo_package = os.path.join(java_dir, 'pojo')
-        # self._create_file_with_replace(pojo_package, 'TestPoJo.java', base_package)
         self._create_pojo(pojo_package, base_package, db_info)
         # 过滤器
         filter_package = os.path.join(java_dir, 'filter')

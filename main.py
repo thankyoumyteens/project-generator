@@ -21,6 +21,6 @@ if __name__ == '__main__':
         else:
             print('还没做呢')
     except IndexError as e:
-        # springmvc out com.zhaoshengzhi test-project 1.0 localhost/3306/root/honglang/mobile
-        print('命令格式: python3 main.py type')
+        print('命令格式: python3 main.py 类型 输出文件夹 groupId artifactId 版本 数据库连接')
+        print('数据库连接: 主机/端口/用户名/密码/数据库名')
         raise e
