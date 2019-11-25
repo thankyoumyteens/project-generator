@@ -414,8 +414,7 @@ class SpringMvcCreator:
     def _create_resources(self, resources_dir, base_package, db_conn):
         os.makedirs(resources_dir)
         # 全局配置文件
-        f = os.path.join(resources_dir, 'app.properties')
-        self._write_default_file('templates/spring-mvc/app.properties', f)
+        self._write_default_file('templates/spring-mvc/app.properties', os.path.join(resources_dir, 'app.properties'))
         # Spring配置文件
         self._create_file_with_replace(resources_dir, 'applicationContext.xml', base_package)
         # Spring数据源配置文件
@@ -425,7 +424,6 @@ class SpringMvcCreator:
         # 日志配置文件
         self._create_file_with_replace(resources_dir, 'logback.xml', base_package)
         # 数据库连接配置文件
-        f = os.path.join(resources_dir, 'datasource.properties')
         content = self._get_template('templates/spring-mvc/datasource.properties')
         db_arr = db_conn.split('/')
         content = re.sub('%USERNAME', db_arr[2], content)
@@ -433,7 +431,7 @@ class SpringMvcCreator:
         content = re.sub('%HOST', db_arr[0], content)
         content = re.sub('%PORT', db_arr[1], content)
         content = re.sub('%DB', db_arr[4], content)
-        self._write_file(content, f)
+        self._write_file(content, os.path.join(resources_dir, 'datasource.properties'))
         # MyBatis映射文件
         db_arr = db_conn.split('/')
         if len(db_arr) == 6:
@@ -441,19 +439,15 @@ class SpringMvcCreator:
         else:
             db_util = db.MySqlUtil(db_arr[0], db_arr[1], db_arr[2], db_arr[3], db_arr[4])
         db_info = db_util.get_db_info()
-        mappers_dir = os.path.join(resources_dir, 'mappers')
-        # self._create_file_with_replace(mappers_dir, 'TestMapper.xml', base_package)
-        self._create_mapper(mappers_dir, base_package, db_info)
+        self._create_mapper(os.path.join(resources_dir, 'mappers'), base_package, db_info)
 
     # 生成webapp
     def _create_webapp(self, webapp_dir, base_package):
         os.makedirs(webapp_dir)
         # index.jsp
-        f = os.path.join(webapp_dir, 'index.jsp')
-        self._write_default_file('templates/spring-mvc/index.jsp', f)
+        self._write_default_file('templates/spring-mvc/index.jsp', os.path.join(webapp_dir, 'index.jsp'))
         # web.xml
-        web_inf_dir = os.path.join(webapp_dir, 'WEB-INF')
-        self._create_file_with_replace(web_inf_dir, 'web.xml', base_package)
+        self._create_file_with_replace(os.path.join(webapp_dir, 'WEB-INF'), 'web.xml', base_package)
 
     # 生成test文件夹
     @staticmethod
