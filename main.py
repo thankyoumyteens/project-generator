@@ -1,5 +1,5 @@
 import sys
-from java_creator import *
+from java_creator import SpringMvcCreator
 
 if __name__ == '__main__':
     try:

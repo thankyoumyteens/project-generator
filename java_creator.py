@@ -5,48 +5,29 @@ import db
 import util
 
 
+# 生成spring mvc项目
 class SpringMvcCreator:
 
+    # 读取模板文件内容
     @staticmethod
     def _get_template(template_file):
-        """
-        读取模板文件内容
-        :param template_file: 模板文件路径
-        :return: 模板文件内容
-        """
         with open(template_file, 'r', encoding='utf-8') as file:
             content = file.read()
         return content
 
+    # 将内容写入文件
     @staticmethod
     def _write_file(content, target_file):
-        """
-        将内容写入文件
-        :param content: 内容
-        :param target_file: 文件路径
-        :return:
-        """
         with open(target_file, 'w', encoding='utf-8') as file:
             file.write(content)
 
+    # 将模板文件的内容写入新文件
     def _write_default_file(self, template_file, target_file):
-        """
-        将模板文件的内容写入新文件
-        :param template_file: 模板文件路径
-        :param target_file: 新文件路径
-        :return:
-        """
         content = self._get_template(template_file)
         self._write_file(content, target_file)
 
+    # 生成文件, 并将包名写入
     def _create_file_with_replace(self, file_dir, file, base_package):
-        """
-        生成文件, 并将包名写入
-        :param file_dir: 文件所在的文件夹
-        :param file: 文件名
-        :param base_package: 包
-        :return:
-        """
         if not os.path.exists(file_dir):
             os.makedirs(file_dir)
         f = os.path.join(file_dir, file)
@@ -55,13 +36,29 @@ class SpringMvcCreator:
         content = re.sub('%BASE_PACKAGE', base_package, content)
         self._write_file(content, f)
 
+    # 获取表的主键
+    @staticmethod
+    def _get_primary_key(columns):
+        primary_key = 'id'
+        primary_key_type = 'java.lang.Long'
+        primary_key_type_short = 'Long'
+        primary_key_jdbc_type = 'BIGINT'
+        for column in columns:
+            name = column['name']
+            db_type = column['type']
+            java_type, jdbc_type = util.get_type_map(db_type)
+            java_type_short = util.get_java_type(db_type)
+            is_primary_key = column['is_primary_key']
+            if is_primary_key:
+                primary_key = name
+                primary_key_type = java_type
+                primary_key_type_short = java_type_short
+                primary_key_jdbc_type = jdbc_type
+        return primary_key, primary_key_type, primary_key_type_short, primary_key_jdbc_type
+
+    # 生成实体类的成员变量
     @staticmethod
     def _generate_fields(columns):
-        """
-        生成实体类的成员变量
-        :param columns:
-        :return:
-        """
         fields_str = ''
         for column in columns:
             name = column['name']
@@ -71,13 +68,9 @@ class SpringMvcCreator:
             fields_str += '\tprivate ' + java_type + ' ' + field_name + ';\n'
         return fields_str
 
+    # 生成实体类的setter方法
     @staticmethod
     def _generate_setters(columns):
-        """
-        生成实体类的setter方法
-        :param columns:
-        :return:
-        """
         setters_str = ''
         for column in columns:
             name = column['name']
@@ -89,13 +82,9 @@ class SpringMvcCreator:
                            field_name + ') { this.' + field_name + ' = ' + field_name + '; }\n'
         return setters_str
 
+    # 生成实体类的getter方法
     @staticmethod
     def _generate_getters(columns):
-        """
-        生成实体类的getter方法
-        :param columns:
-        :return:
-        """
         getters_str = ''
         for column in columns:
             name = column['name']
@@ -106,14 +95,8 @@ class SpringMvcCreator:
             getters_str += '\tpublic ' + java_type + ' get' + method_name + '() { return ' + field_name + '; }\n'
         return getters_str
 
+    # 生成实体类
     def _create_pojo(self, pojo_package, base_package, db_info):
-        """
-        生成实体类
-        :param pojo_package:
-        :param base_package:
-        :param db_info:
-        :return:
-        """
         if not os.path.exists(pojo_package):
             os.makedirs(pojo_package)
         for table_info in db_info.items():
@@ -124,7 +107,6 @@ class SpringMvcCreator:
             class_name = util.get_class_name(table_name)
             file_name = os.path.join(pojo_package, class_name + '.java')
             package_str = 'package ' + base_package + '.pojo;'
-            # import_str = ''
             class_str = 'public class ' + class_name + ' {'
             class_str += '\n'
             class_str += self._generate_fields(columns)
@@ -136,19 +118,11 @@ class SpringMvcCreator:
 
             content += package_str
             content += '\n\n'
-            # content += import_str
-            # content += '\n\n'
             content += class_str
             self._write_file(content, file_name)
 
+    # 生成Dao接口
     def _create_dao(self, dao_package, base_package, db_info):
-        """
-        生成Dao接口
-        :param dao_package:
-        :param base_package:
-        :param db_info:
-        :return:
-        """
         if not os.path.exists(dao_package):
             os.makedirs(dao_package)
         for table_info in db_info.items():
@@ -182,6 +156,7 @@ class SpringMvcCreator:
             content += class_str
             self._write_file(content, file_name)
 
+    # 生成mapper中的ResultMap
     @staticmethod
     def _generate_result_map(base_package, class_name, columns):
         result = '\t<resultMap id="BaseResultMap" type="' + base_package + '.pojo.' + class_name + '">\n'
@@ -201,38 +176,8 @@ class SpringMvcCreator:
         result += '\t</resultMap>\n'
         return result
 
-    @staticmethod
-    def _get_primary_key(columns):
-        """
-        获取表的主键
-        :param columns: 表中的所有列
-        :return: 主键
-        """
-        primary_key = 'id'
-        primary_key_type = 'java.lang.Long'
-        primary_key_type_short = 'Long'
-        primary_key_jdbc_type = 'BIGINT'
-        for column in columns:
-            name = column['name']
-            db_type = column['type']
-            java_type, jdbc_type = util.get_type_map(db_type)
-            java_type_short = util.get_java_type(db_type)
-            is_primary_key = column['is_primary_key']
-            if is_primary_key:
-                primary_key = name
-                primary_key_type = java_type
-                primary_key_type_short = java_type_short
-                primary_key_jdbc_type = jdbc_type
-        return primary_key, primary_key_type, primary_key_type_short, primary_key_jdbc_type
-
+    # 生成MyBatis的sql映射文件
     def _create_mapper(self, mappers_dir, base_package, db_info):
-        """
-        生成MyBatis的sql映射文件
-        :param mappers_dir:
-        :param base_package:
-        :param db_info:
-        :return:
-        """
         if not os.path.exists(mappers_dir):
             os.makedirs(mappers_dir)
         for table_info in db_info.items():
@@ -348,14 +293,8 @@ class SpringMvcCreator:
             content += mapper_str
             self._write_file(content, file_name)
 
+    # 生成service接口
     def _create_service(self, service_package, base_package, db_info):
-        """
-        生成service接口
-        :param service_package:
-        :param base_package:
-        :param db_info:
-        :return:
-        """
         if not os.path.exists(service_package):
             os.makedirs(service_package)
         for table_info in db_info.items():
@@ -389,14 +328,8 @@ class SpringMvcCreator:
             content += class_str
             self._write_file(content, file_name)
 
+    # 生成service实现类
     def _create_service_impl(self, service_impl_package, base_package, db_info):
-        """
-        生成service实现类
-        :param service_impl_package:
-        :param base_package:
-        :param db_info:
-        :return:
-        """
         if not os.path.exists(service_impl_package):
             os.makedirs(service_impl_package)
         for table_info in db_info.items():
@@ -443,13 +376,8 @@ class SpringMvcCreator:
             content += class_str
             self._write_file(content, file_name)
 
+    # 生成java源代码
     def _create_java(self, java_dir, base_package, db_conn):
-        """
-        生成java源代码
-        :param java_dir: java文件夹
-        :param base_package: 包
-        :return:
-        """
         packages = base_package.split('.')
         for package in packages:
             java_dir = os.path.join(java_dir, package)
@@ -482,13 +410,8 @@ class SpringMvcCreator:
         interceptor_package = os.path.join(java_dir, 'interceptor')
         self._create_file_with_replace(interceptor_package, 'AuthorityInterceptor.java', base_package)
 
+    # 生成资源文件夹
     def _create_resources(self, resources_dir, base_package, db_conn):
-        """
-        生成资源文件夹
-        :param resources_dir: 资源文件夹
-        :param base_package: 包
-        :return:
-        """
         os.makedirs(resources_dir)
         # 全局配置文件
         f = os.path.join(resources_dir, 'app.properties')
@@ -522,13 +445,8 @@ class SpringMvcCreator:
         # self._create_file_with_replace(mappers_dir, 'TestMapper.xml', base_package)
         self._create_mapper(mappers_dir, base_package, db_info)
 
+    # 生成webapp
     def _create_webapp(self, webapp_dir, base_package):
-        """
-        生成webapp
-        :param webapp_dir: webapp文件夹
-        :param base_package: 包
-        :return:
-        """
         os.makedirs(webapp_dir)
         # index.jsp
         f = os.path.join(webapp_dir, 'index.jsp')
@@ -537,25 +455,14 @@ class SpringMvcCreator:
         web_inf_dir = os.path.join(webapp_dir, 'WEB-INF')
         self._create_file_with_replace(web_inf_dir, 'web.xml', base_package)
 
+    # 生成test文件夹
     @staticmethod
     def _create_test(test_dir):
-        """
-        生成test文件夹
-        :param test_dir: test文件夹
-        :return:
-        """
         os.makedirs(os.path.join(test_dir, 'java'))
         os.makedirs(os.path.join(test_dir, 'resources'))
 
+    # 生成pom.xml文件
     def _create_pom(self, project_dir, group_id, artifact_id, version):
-        """
-        生成pom.xml文件
-        :param project_dir: 项目文件夹
-        :param group_id: Group Id
-        :param artifact_id: Artifact Id
-        :param version: 版本号
-        :return:
-        """
         if not os.path.exists(project_dir):
             os.makedirs(project_dir)
         # pom.xml
@@ -567,18 +474,15 @@ class SpringMvcCreator:
         content = re.sub('%VERSION', version, content)
         self._write_file(content, f)
 
+    # 生成.gitignore文件
     def _create_git_ignore(self, project_dir):
-        """
-        生成.gitignore文件
-        :param project_dir: 项目文件夹
-        :return:
-        """
         if not os.path.exists(project_dir):
             os.makedirs(project_dir)
         # .gitignore
         f = os.path.join(project_dir, '.gitignore')
         self._write_default_file('templates/spring-mvc/.gitignore', f)
 
+    # 入口
     def create(self, root_dir, group_id, artifact_id, version, db_conn):
         # 清理输出文件夹
         if not os.path.exists(root_dir):
@@ -588,23 +492,19 @@ class SpringMvcCreator:
             os.makedirs(root_dir)
         # 项目文件夹
         project_dir = os.path.join(root_dir, artifact_id)
-        # pom
+        # pom.xml
         self._create_pom(project_dir, group_id, artifact_id, version)
-        # git
+        # .gitignore
         self._create_git_ignore(project_dir)
         # src文件夹
         src_dir = os.path.join(project_dir, 'src')
         # main文件夹
         main_dir = os.path.join(src_dir, 'main')
         # java源文件文件夹
-        java_dir = os.path.join(main_dir, 'java')
-        self._create_java(java_dir, group_id, db_conn)
+        self._create_java(os.path.join(main_dir, 'java'), group_id, db_conn)
         # 资源文件文件夹
-        resources_dir = os.path.join(main_dir, 'resources')
-        self._create_resources(resources_dir, group_id, db_conn)
+        self._create_resources(os.path.join(main_dir, 'resources'), group_id, db_conn)
         # webapp文件夹
-        webapp_dir = os.path.join(main_dir, 'webapp')
-        self._create_webapp(webapp_dir, group_id)
+        self._create_webapp(os.path.join(main_dir, 'webapp'), group_id)
         # 单元测试文件夹
-        test_dir = os.path.join(src_dir, 'test')
-        self._create_test(test_dir)
+        self._create_test(os.path.join(src_dir, 'test'))
